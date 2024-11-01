@@ -8,9 +8,7 @@ export default defineConfig({
     },
     plugins: [solidPlugin()],
     server: {
-        port: 3000,
-        hmr: false,
-        watch: undefined
+        port: 3000
     },
     build: {
         target: 'esnext'

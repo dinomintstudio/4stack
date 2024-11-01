@@ -1,3 +1,3 @@
 # 4stack
 
-Tetrimino stacking client intended for practicing
+Tetromino stacking client intended for practicing

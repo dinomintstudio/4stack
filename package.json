@@ -2,7 +2,7 @@
     "$schema": "https://json.schemastore.org/package.json",
     "name": "4stack",
     "version": "0.1.0",
-    "description": "Tetrimino stacking client intended for practicing",
+    "description": "Tetromino stacking client intended for practicing",
     "scripts": {
         "start": "vite --host 127.0.0.1",
         "dev": "vite",
@@ -28,7 +28,10 @@
         "vite-plugin-solid": "2.7.0"
     },
     "dependencies": {
-        "solid-js": "1.7.6"
+        "solid-js": "1.7.6",
+        "@vole-engine/core": "0.0.40",
+        "@vole-engine/draw": "0.0.1",
+        "rxjs": "7.8.1"
     },
     "packageManager": "pnpm@9.4.0"
 }
