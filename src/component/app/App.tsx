@@ -161,7 +161,7 @@ export const App: Component = () => {
         const screenSize = vec(canvas.width, canvas.height)
         const screenCenter = screenSize.scale(0.5)
         const blockSize = gameConfig.blockScreenSize
-        const boardSize = gameConfig.boardSize.scale(blockSize)
+        const boardSize = gameConfig.boardSize.add(vec(0, 2)).scale(blockSize)
         const boardCenter = boardSize.scale(0.5)
         return v.add(vec(0.5, 0.5)).scale(blockSize).add(boardCenter.negate()).scale(vec(1, -1)).add(screenCenter)
     }
