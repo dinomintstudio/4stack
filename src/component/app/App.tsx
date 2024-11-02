@@ -128,7 +128,18 @@ export const pieces: PieceOrientationState[] = piecesDescription.map(createOrien
 export const gameConfig = {
     boardSize: vec(10, 20),
     blockScreenSize: vec(40, 40),
-    colors: ['#111111', '#333333', 'cyan', 'yellow', 'purple', 'green', 'red', 'blue', 'orange']
+    colors: [
+        'transparent',
+        '#333333',
+        '#555555',
+        '#25e4f4',
+        '#fded02',
+        '#af20fe',
+        '#01a252',
+        '#db2d20',
+        '#0160f4',
+        '#ee6522'
+    ]
 }
 
 export const App: Component = () => {
@@ -144,8 +155,17 @@ export const App: Component = () => {
         canvas.height = window.innerHeight
     }
 
+    const boardToScreen = (v: Vector): Vector => {
+        const screenSize = vec(canvas.width, canvas.height)
+        const screenCenter = screenSize.scale(0.5)
+        const blockSize = gameConfig.blockScreenSize
+        const boardSize = gameConfig.boardSize.add(vec(0, 2)).scale(blockSize)
+        const boardCenter = boardSize.scale(0.5)
+        return v.add(vec(0.5, 0.5)).scale(blockSize).add(boardCenter.negate()).scale(vec(1, -1)).add(screenCenter)
+    }
+
     const drawBoard = (board: Board): void => {
-        const gridOpts = { stroke: '#444444' }
+        const gridOpts = { fill: gameConfig.colors[0], stroke: gameConfig.colors[1] }
 
         for (let i = 0; i < gameConfig.boardSize.x; i++) {
             for (let j = 0; j < gameConfig.boardSize.y; j++) {
@@ -157,17 +177,8 @@ export const App: Component = () => {
         // TODO: draw board
     }
 
-    const boardToScreen = (v: Vector): Vector => {
-        const screenSize = vec(canvas.width, canvas.height)
-        const screenCenter = screenSize.scale(0.5)
-        const blockSize = gameConfig.blockScreenSize
-        const boardSize = gameConfig.boardSize.add(vec(0, 2)).scale(blockSize)
-        const boardCenter = boardSize.scale(0.5)
-        return v.add(vec(0.5, 0.5)).scale(blockSize).add(boardCenter.negate()).scale(vec(1, -1)).add(screenCenter)
-    }
-
     const drawActivePiece = (activePiece: ActivePiece): void => {
-        const opts = { fill: gameConfig.colors[activePiece.pieceId + 2], stroke: '#444444' }
+        const opts = { fill: gameConfig.colors[activePiece.pieceId + 3], stroke: gameConfig.colors[1] }
 
         pieces[activePiece.pieceId].orientations[activePiece.orientation].blocs.forEach(block => {
             const pos = activePiece.position.add(block)
