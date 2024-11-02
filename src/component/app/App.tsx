@@ -8,25 +8,37 @@ export const createOrientations = (desc: PieceDescription): PieceOrientationStat
     const orientation = { blocs: desc.blocs }
     if (desc.rotationMode === 'off') return { orientations: [orientation, orientation, orientation, orientation] }
     const offset = desc.rotationMode === 'between' ? 1 : 0
-    const cw = { blocs: orientation.blocs.map(b => rotateCw(b).add(Vector.Right.scale(offset))) }
-    const cw2 = { blocs: cw.blocs.map(b => rotateCw(b).add(Vector.Right.scale(offset))) }
-    const cw3 = { blocs: cw2.blocs.map(b => rotateCw(b).add(Vector.Right.scale(offset))) }
+    const cw = { blocs: orientation.blocs.map(b => rotateCw(b)) }
+    const cw2 = { blocs: cw.blocs.map(b => rotateCw(b)) }
+    const cw3 = { blocs: cw2.blocs.map(b => rotateCw(b)) }
 
-    return { orientations: [orientation, cw, cw2, cw3] }
+    switch (desc.rotationMode) {
+        case 'normal':
+            return { orientations: [orientation, cw, cw2, cw3] }
+        case 'between':
+            return {
+                orientations: [
+                    orientation,
+                    { blocs: cw.blocs.map(b => b.add(vec(1, 0).scale(offset))) },
+                    { blocs: cw2.blocs.map(b => b.add(vec(1, -1).scale(offset))) },
+                    { blocs: cw3.blocs.map(b => b.add(vec(0, -1).scale(offset))) }
+                ]
+            }
+    }
 }
 
 /**
- * (1, 1)
+ * (1, -1)
  * ...
  * .o.
  * ..x
  *
- * (-1, 1)
+ * (-1, -1)
  * ...
  * .o.
  * x..
  */
-export const rotateCw = (position: Vector): Vector => vec(-position.y, position.x)
+export const rotateCw = (position: Vector): Vector => vec(position.y, -position.x)
 
 export type Board = Color[][]
 
@@ -86,27 +98,27 @@ export const piecesDescription: PieceDescription[] = [
     },
     {
         // T piece
-        blocs: [vec(0, 0), vec(0, -1), vec(1, 0), vec(-1, 0)],
+        blocs: [vec(0, 0), vec(0, 1), vec(1, 0), vec(-1, 0)],
         rotationMode: 'normal'
     },
     {
         // S piece
-        blocs: [vec(0, 0), vec(-1, 0), vec(0, -1), vec(1, -1)],
+        blocs: [vec(0, 0), vec(-1, 0), vec(0, 1), vec(1, 1)],
         rotationMode: 'normal'
     },
     {
         // Z piece
-        blocs: [vec(0, 0), vec(1, 0), vec(0, -1), vec(-1, -1)],
+        blocs: [vec(0, 0), vec(1, 0), vec(0, 1), vec(-1, 1)],
         rotationMode: 'normal'
     },
     {
         // J piece
-        blocs: [vec(0, 0), vec(-1, -1), vec(-1, 0), vec(1, 0)],
+        blocs: [vec(0, 0), vec(-1, 1), vec(-1, 0), vec(1, 0)],
         rotationMode: 'normal'
     },
     {
         // L piece
-        blocs: [vec(0, 0), vec(1, -1), vec(1, 0), vec(-1, 0)],
+        blocs: [vec(0, 0), vec(1, 1), vec(1, 0), vec(-1, 0)],
         rotationMode: 'normal'
     }
 ]
@@ -133,42 +145,33 @@ export const App: Component = () => {
     }
 
     const drawBoard = (board: Board): void => {
-        const screenSize = vec(canvas.width, canvas.height)
-        const screenCenter = screenSize.scale(0.5)
-        const blockSize = gameConfig.blockScreenSize
-        const boardSize = gameConfig.boardSize.scale(blockSize)
         const gridOpts = { stroke: '#444444' }
 
         for (let i = 0; i < gameConfig.boardSize.x; i++) {
             for (let j = 0; j < gameConfig.boardSize.y; j++) {
-                ctx.rect(
-                    blockSize.scale(vec(i, j)).add(blockSize.scale(0.5)).add(screenCenter).add(boardSize.scale(-0.5)),
-                    blockSize,
-                    gridOpts
-                )
+                const pos = boardToScreen(vec(i, j))
+                ctx.rect(pos, gameConfig.blockScreenSize, gridOpts)
             }
         }
 
         // TODO: draw board
     }
 
-    const drawActivePiece = (activePiece: ActivePiece): void => {
+    const boardToScreen = (v: Vector): Vector => {
         const screenSize = vec(canvas.width, canvas.height)
         const screenCenter = screenSize.scale(0.5)
         const blockSize = gameConfig.blockScreenSize
         const boardSize = gameConfig.boardSize.scale(blockSize)
+        const boardCenter = boardSize.scale(0.5)
+        return v.add(vec(0.5, 0.5)).scale(blockSize).add(boardCenter.negate()).scale(vec(1, -1)).add(screenCenter)
+    }
+
+    const drawActivePiece = (activePiece: ActivePiece): void => {
         const opts = { fill: gameConfig.colors[activePiece.pieceId + 2], stroke: '#444444' }
-        const gridOffset = vec(Math.floor(gameConfig.boardSize.x / 2) - 1, -1)
 
         pieces[activePiece.pieceId].orientations[activePiece.orientation].blocs.forEach(block => {
-            const position = activePiece.position
-                .add(block)
-                .add(gridOffset)
-                .scale(blockSize)
-                .add(blockSize.scale(0.5))
-                .add(screenCenter)
-                .add(boardSize.scale(-0.5))
-            ctx.rect(position, blockSize, opts)
+            const pos = activePiece.position.add(block)
+            ctx.rect(boardToScreen(pos), gameConfig.blockScreenSize, opts)
         })
     }
 
@@ -182,9 +185,9 @@ export const App: Component = () => {
         subs.push(
             engine.eventDispatcher.beforeUpdate.subscribe(() => {
                 if (!activePiece) {
+                    const spawnPos = vec(Math.floor(gameConfig.boardSize.x / 2) - 1, gameConfig.boardSize.y)
                     // TODO: piece selection
-                    const pieceId = 0
-                    activePiece = { pieceId, position: vec(0, 0), orientation: 0 }
+                    activePiece = { pieceId: 0, position: spawnPos, orientation: 0 }
                 }
                 if (engine.frameInfo.id % 10 === 0) {
                     activePiece.orientation = (activePiece.orientation + 1) % 4
@@ -210,7 +213,7 @@ export const App: Component = () => {
 
     return (
         <div class="App">
-            <canvas ref={canvas}></canvas>
+            <canvas ref={canvas} />
         </div>
     )
 }
