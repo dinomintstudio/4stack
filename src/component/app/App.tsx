@@ -208,9 +208,9 @@ export const App: Component = () => {
         const screenSize = vec(canvas.width, canvas.height)
         const screenCenter = screenSize.scale(0.5)
         const blockSize = gameConfig.blockScreenSize
-        const boardSize = gameConfig.boardSize.add(vec(0, 2)).scale(blockSize)
-        const boardCenter = boardSize.scale(0.5)
-        const res = v.add(vec(0.5, 0.5)).scale(blockSize).add(boardCenter.negate()).scale(vec(1, -1)).add(screenCenter)
+        const viewSize = gameConfig.boardSize.add(vec(5, 2)).scale(blockSize)
+        const viewCenter = viewSize.scale(0.5)
+        const res = v.add(vec(0.5, 0.5)).scale(blockSize).add(viewCenter.negate()).scale(vec(1, -1)).add(screenCenter)
         return vec(Math.floor(res.x), Math.floor(res.y))
     }
 
@@ -228,6 +228,20 @@ export const App: Component = () => {
                 }
             }
         }
+    }
+
+    const drawQueue = (queue: Queue, pieceIndex: number): void => {
+        const offset = vec(2.5, 0)
+        queue.slice(pieceIndex + 1, pieceIndex + 5).forEach((pieceId, i) => {
+            const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
+            offset.y -= height
+            const rotationModeOffset = vec(piecesDescription[pieceId].rotationMode === 'normal' ? 0 : -0.5, 0)
+            drawPiece(
+                { pieceId, position: gameConfig.boardSize.add(offset).add(rotationModeOffset), orientation: 0 },
+                { fill: gameConfig.colors[pieceId + 3], stroke: gameConfig.colors[1] }
+            )
+            offset.y -= 1
+        })
     }
 
     const drawPiece = (piece: ActivePiece, opts: DrawOptions): void => {
@@ -374,6 +388,7 @@ export const App: Component = () => {
             engine.eventDispatcher.beforeDraw.subscribe(() => {
                 ctx.clear()
                 drawBoard(board)
+                drawQueue(queue, pieceIndex)
                 if (activePiece) {
                     drawPiece(activePiece, {
                         fill: gameConfig.colors[activePiece.pieceId + 3],
