@@ -27,6 +27,26 @@ export const createOrientations = (desc: PieceDescription): PieceOrientationStat
     }
 }
 
+export const generateQueue = (desc: PieceDescription[], size: number): number[] => {
+    const shuffle = (a: number[]): number[] => {
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[a[i], a[j]] = [a[j], a[i]] // Swap elements
+        }
+        return a
+    }
+
+    const queue: number[] = []
+    let bag: number[] = []
+    for (let i = 0; i < size; i++) {
+        if (bag.length === 0) {
+            bag = shuffle(new Array(desc.length).fill(0).map((_, i) => i))
+        }
+        queue.push(bag.splice(0, 1)[0])
+    }
+    return queue
+}
+
 /**
  * (1, -1)
  * ...
@@ -43,6 +63,8 @@ export const rotateCw = (position: Vector): Vector => vec(position.y, -position.
 export const createButton = () => ({ held: false, down: false, pressed: false, released: false })
 
 export type Board = Color[][]
+
+export type Queue = number[]
 
 /**
  * 0 is empty
@@ -171,6 +193,8 @@ export const App: Component = () => {
     let ctx!: Context
     let engine!: Engine
     const board: Board = []
+    const queue: Queue = generateQueue(piecesDescription, piecesDescription.length * 64)
+    let pieceIndex = 0
     let activePiece: ActivePiece | undefined
     const subs: Subscription[] = []
 
@@ -291,7 +315,10 @@ export const App: Component = () => {
             activePiece.orientation = (activePiece.orientation + 1) % 4
         }
         if (input.ccw.pressed) {
-            activePiece.orientation = (4 + activePiece.orientation - 1) % 4
+            activePiece.orientation = (activePiece.orientation + 3) % 4
+        }
+        if (input.r180.pressed) {
+            activePiece.orientation = (activePiece.orientation + 2) % 4
         }
 
         // TODO: wall kicks
@@ -308,6 +335,7 @@ export const App: Component = () => {
             insertPiece(board, activePiece)
             clearLines(board)
             activePiece = undefined
+            pieceIndex = (pieceIndex + 1) % queue.length
         }
     }
 
@@ -325,7 +353,7 @@ export const App: Component = () => {
 
                 if (!activePiece) {
                     const spawnPos = vec(Math.floor(gameConfig.boardSize.x / 2) - 1, gameConfig.boardSize.y)
-                    const pieceId = Math.floor(Math.random() * piecesDescription.length)
+                    const pieceId = queue[pieceIndex]
                     // TODO: piece selection
                     activePiece = { pieceId, position: spawnPos, orientation: 0 }
                 }
