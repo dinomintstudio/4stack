@@ -110,6 +110,13 @@ export type Button = {
     released: boolean
 }
 
+export type State = {
+    board: Board
+    activePiece?: ActivePiece
+    queue: Queue
+    pieceIndex: number
+}
+
 export const piecesDescription: PieceDescription[] = [
     {
         // I piece
@@ -177,6 +184,7 @@ export const gameConfig = {
         '#f55d3e'
     ],
     blockLineWidth: 1,
+    visibleQueuePieces: 4,
     keyMap: {
         left: 'KeyA',
         right: 'KeyD',
@@ -193,11 +201,14 @@ export const App: Component = () => {
     let canvas!: HTMLCanvasElement
     let ctx!: Context
     let engine!: Engine
-    const board: Board = []
-    const queue: Queue = generateQueue(piecesDescription, piecesDescription.length * 64)
-    let pieceIndex = 0
-    let activePiece: ActivePiece | undefined
     const subs: Subscription[] = []
+
+    const state: State = {
+        board: [],
+        activePiece: undefined,
+        queue: generateQueue(piecesDescription, piecesDescription.length * 64),
+        pieceIndex: 0
+    }
 
     const resizeWindow = (): void => {
         canvas.width = window.innerWidth
@@ -208,7 +219,7 @@ export const App: Component = () => {
         const screenSize = vec(canvas.width, canvas.height)
         const screenCenter = screenSize.scale(0.5)
         const blockSize = gameConfig.blockScreenSize
-        const viewSize = gameConfig.boardSize.add(vec(5, 2)).scale(blockSize)
+        const viewSize = gameConfig.boardSize.add(vec(0, 2)).scale(blockSize)
         const viewCenter = viewSize.scale(0.5)
         const res = v.add(vec(0.5, 0.5)).scale(blockSize).add(viewCenter.negate()).scale(vec(1, -1)).add(screenCenter)
         return vec(Math.floor(res.x), Math.floor(res.y))
@@ -232,7 +243,8 @@ export const App: Component = () => {
 
     const drawQueue = (queue: Queue, pieceIndex: number): void => {
         const offset = vec(2.5, 0)
-        queue.slice(pieceIndex + 1, pieceIndex + 5).forEach((pieceId, i) => {
+        // TODO: won't show pieces when wrapping queue around
+        queue.slice(pieceIndex + 1, pieceIndex + 1 + gameConfig.visibleQueuePieces).forEach((pieceId, i) => {
             const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
             offset.y -= height
             const rotationModeOffset = vec(piecesDescription[pieceId].rotationMode === 'normal' ? 0 : -0.5, 0)
@@ -320,45 +332,45 @@ export const App: Component = () => {
     }
 
     const updatePiece = (): void => {
-        if (!activePiece) throw Error()
-        const originalPos = activePiece.position
+        if (!state.activePiece) throw Error()
+        const originalPos = state.activePiece.position
 
         if (input.right.pressed) {
-            activePiece.position = activePiece.position.add(vec(1, 0))
+            state.activePiece.position = state.activePiece.position.add(vec(1, 0))
         }
         if (input.left.pressed) {
-            activePiece.position = activePiece.position.add(vec(-1, 0))
+            state.activePiece.position = state.activePiece.position.add(vec(-1, 0))
         }
-        if (collides(board, activePiece)) {
-            activePiece.position = originalPos
+        if (collides(state.board, state.activePiece)) {
+            state.activePiece.position = originalPos
         }
 
-        const originalOrient = activePiece.orientation
+        const originalOrient = state.activePiece.orientation
         if (input.cw.pressed) {
-            activePiece.orientation = (activePiece.orientation + 1) % 4
+            state.activePiece.orientation = (state.activePiece.orientation + 1) % 4
         }
         if (input.ccw.pressed) {
-            activePiece.orientation = (activePiece.orientation + 3) % 4
+            state.activePiece.orientation = (state.activePiece.orientation + 3) % 4
         }
         if (input.r180.pressed) {
-            activePiece.orientation = (activePiece.orientation + 2) % 4
+            state.activePiece.orientation = (state.activePiece.orientation + 2) % 4
         }
 
         // TODO: wall kicks
-        if (collides(board, activePiece)) {
-            activePiece.orientation = originalOrient
+        if (collides(state.board, state.activePiece)) {
+            state.activePiece.orientation = originalOrient
         }
 
         if (input.hard.pressed) {
-            while (!collides(board, activePiece)) {
-                activePiece.position = activePiece.position.add(vec(0, -1))
+            while (!collides(state.board, state.activePiece)) {
+                state.activePiece.position = state.activePiece.position.add(vec(0, -1))
             }
             // TODO: will ascend if not checked for game over
-            activePiece.position = activePiece.position.add(vec(0, 1))
-            insertPiece(board, activePiece)
-            clearLines(board)
-            activePiece = undefined
-            pieceIndex = (pieceIndex + 1) % queue.length
+            state.activePiece.position = state.activePiece.position.add(vec(0, 1))
+            insertPiece(state.board, state.activePiece)
+            clearLines(state.board)
+            state.activePiece = undefined
+            state.pieceIndex = (state.pieceIndex + 1) % state.queue.length
         }
     }
 
@@ -374,11 +386,11 @@ export const App: Component = () => {
             engine.eventDispatcher.beforeUpdate.subscribe(() => {
                 updateInput()
 
-                if (!activePiece) {
+                if (!state.activePiece) {
                     const spawnPos = vec(Math.floor(gameConfig.boardSize.x / 2) - 1, gameConfig.boardSize.y)
-                    const pieceId = queue[pieceIndex]
+                    const pieceId = state.queue[state.pieceIndex]
                     // TODO: piece selection
-                    activePiece = { pieceId, position: spawnPos, orientation: 0 }
+                    state.activePiece = { pieceId, position: spawnPos, orientation: 0 }
                 }
 
                 updatePiece()
@@ -387,14 +399,14 @@ export const App: Component = () => {
         subs.push(
             engine.eventDispatcher.beforeDraw.subscribe(() => {
                 ctx.clear()
-                drawBoard(board)
-                drawQueue(queue, pieceIndex)
-                if (activePiece) {
-                    drawPiece(activePiece, {
-                        fill: gameConfig.colors[activePiece.pieceId + 3],
+                drawBoard(state.board)
+                drawQueue(state.queue, state.pieceIndex)
+                if (state.activePiece) {
+                    drawPiece(state.activePiece, {
+                        fill: gameConfig.colors[state.activePiece.pieceId + 3],
                         stroke: gameConfig.colors[1]
                     })
-                    drawGhost(board, activePiece)
+                    drawGhost(state.board, state.activePiece)
                 }
             })
         )
