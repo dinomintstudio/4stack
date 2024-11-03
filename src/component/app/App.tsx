@@ -31,7 +31,7 @@ export const generateQueue = (desc: PieceDescription[], size: number): number[] 
     const shuffle = (a: number[]): number[] => {
         for (let i = a.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
-            ;[a[i], a[j]] = [a[j], a[i]] // Swap elements
+            ;[a[i], a[j]] = [a[j], a[i]]
         }
         return a
     }
@@ -108,6 +108,7 @@ export type Button = {
     down: boolean
     pressed: boolean
     released: boolean
+    pressedFrame?: number
 }
 
 export type State = {
@@ -196,7 +197,9 @@ export const gameConfig = {
         soft: 'KeyS',
         hard: 'Space',
         hold: 'KeyI'
-    }
+    },
+    arr: 2,
+    das: 10
 }
 
 export const App: Component = () => {
@@ -347,17 +350,37 @@ export const App: Component = () => {
             button.pressed = button.down && !button.held
             button.released = !button.down && button.held
             button.held = button.down
+
+            if (button.pressed) {
+                button.pressedFrame = engine.frameInfo.id
+            }
+            if (button.released) {
+                button.pressedFrame = undefined
+            }
         })
+    }
+
+    /**
+     * TODO: support 0F rates
+     */
+    const buttonActiveThisFrame = (button: Button): boolean => {
+        if (button.pressed) return true
+        if (button.pressedFrame) {
+            const framesDown = engine.frameInfo.id - button.pressedFrame
+            const framesRepeat = framesDown - gameConfig.das
+            return framesRepeat >= 0 && framesRepeat % gameConfig.arr === 0
+        }
+        return false
     }
 
     const updatePiece = (): void => {
         if (!state.activePiece) throw Error()
         const originalPos = state.activePiece.position
 
-        if (input.right.pressed) {
+        if (buttonActiveThisFrame(input.right)) {
             state.activePiece.position = state.activePiece.position.add(vec(1, 0))
         }
-        if (input.left.pressed) {
+        if (buttonActiveThisFrame(input.left)) {
             state.activePiece.position = state.activePiece.position.add(vec(-1, 0))
         }
         if (collides(state.board, state.activePiece)) {
