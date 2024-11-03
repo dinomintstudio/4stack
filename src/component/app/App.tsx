@@ -114,7 +114,9 @@ export type State = {
     board: Board
     activePiece?: ActivePiece
     queue: Queue
-    pieceIndex: number
+    queueIndex: number
+    holdPiece?: number
+    holdAvailable: boolean
 }
 
 export const piecesDescription: PieceDescription[] = [
@@ -207,7 +209,8 @@ export const App: Component = () => {
         board: [],
         activePiece: undefined,
         queue: generateQueue(piecesDescription, piecesDescription.length * 64),
-        pieceIndex: 0
+        queueIndex: 0,
+        holdAvailable: true
     }
 
     const resizeWindow = (): void => {
@@ -223,6 +226,20 @@ export const App: Component = () => {
         const viewCenter = viewSize.scale(0.5)
         const res = v.add(vec(0.5, 0.5)).scale(blockSize).add(viewCenter.negate()).scale(vec(1, -1)).add(screenCenter)
         return vec(Math.floor(res.x), Math.floor(res.y))
+    }
+
+    const drawBlock = (pos: Vector, opts: DrawOptions): void => {
+        ctx.rect(boardToScreen(pos), gameConfig.blockScreenSize, { ...opts, lineWidth: gameConfig.blockLineWidth })
+    }
+
+    const pieceBoardPos = (piece: ActivePiece): Piece => {
+        return {
+            blocks: pieces[piece.pieceId].orientations[piece.orientation].blocks.map(b => piece.position.add(b))
+        }
+    }
+
+    const drawPiece = (piece: ActivePiece, opts: DrawOptions): void => {
+        pieceBoardPos(piece).blocks.forEach(pos => drawBlock(pos, opts))
     }
 
     const drawBoard = (board: Board): void => {
@@ -241,10 +258,10 @@ export const App: Component = () => {
         }
     }
 
-    const drawQueue = (queue: Queue, pieceIndex: number): void => {
+    const drawQueue = (state: State): void => {
         const offset = vec(2.5, 0)
         // TODO: won't show pieces when wrapping queue around
-        queue.slice(pieceIndex + 1, pieceIndex + 1 + gameConfig.visibleQueuePieces).forEach((pieceId, i) => {
+        state.queue.slice(state.queueIndex, state.queueIndex + gameConfig.visibleQueuePieces).forEach((pieceId, i) => {
             const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
             offset.y -= height
             const rotationModeOffset = vec(piecesDescription[pieceId].rotationMode === 'normal' ? 0 : -0.5, 0)
@@ -256,29 +273,31 @@ export const App: Component = () => {
         })
     }
 
-    const drawPiece = (piece: ActivePiece, opts: DrawOptions): void => {
-        pieceBoardPos(piece).blocks.forEach(pos => drawBlock(pos, opts))
+    const drawHold = (state: State): void => {
+        if (state.holdPiece !== undefined) {
+            const pieceId = state.holdPiece
+            const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
+            const rotationModeOffset = piecesDescription[pieceId].rotationMode === 'normal' ? 0 : 0.5
+            drawPiece(
+                { pieceId, position: vec(-3.5 - rotationModeOffset, gameConfig.boardSize.y - height), orientation: 0 },
+                { fill: gameConfig.colors[pieceId + 3], stroke: gameConfig.colors[1] }
+            )
+        }
     }
 
-    const drawGhost = (board: Board, piece: ActivePiece): void => {
-        const ghost: ActivePiece = { pieceId: piece.pieceId, position: piece.position, orientation: piece.orientation }
-        while (!collides(board, ghost)) {
+    const drawGhost = (state: State, piece: ActivePiece): void => {
+        const ghost: ActivePiece = {
+            pieceId: piece.pieceId,
+            position: piece.position,
+            orientation: piece.orientation
+        }
+        while (!collides(state.board, ghost)) {
             ghost.position = ghost.position.add(vec(0, -1))
         }
         ghost.position = ghost.position.add(vec(0, 1))
         if (piece.position.y === ghost.position.y) return
 
         drawPiece(ghost, { stroke: gameConfig.colors[piece.pieceId + 3] })
-    }
-
-    const drawBlock = (pos: Vector, opts: DrawOptions): void => {
-        ctx.rect(boardToScreen(pos), gameConfig.blockScreenSize, { ...opts, lineWidth: gameConfig.blockLineWidth })
-    }
-
-    const pieceBoardPos = (piece: ActivePiece): Piece => {
-        return {
-            blocks: pieces[piece.pieceId].orientations[piece.orientation].blocks.map(b => piece.position.add(b))
-        }
     }
 
     const insertPiece = (board: Board, piece: ActivePiece): void => {
@@ -369,9 +388,20 @@ export const App: Component = () => {
             state.activePiece.position = state.activePiece.position.add(vec(0, 1))
             insertPiece(state.board, state.activePiece)
             clearLines(state.board)
+            state.holdAvailable = true
             state.activePiece = undefined
-            state.pieceIndex = (state.pieceIndex + 1) % state.queue.length
         }
+    }
+
+    const spawnPiece = (state: State, pieceId?: number): void => {
+        const spawnPos = vec(Math.floor(gameConfig.boardSize.x / 2) - 1, gameConfig.boardSize.y)
+        if (pieceId !== undefined) {
+            state.activePiece = { pieceId, position: spawnPos, orientation: 0 }
+            return
+        }
+        pieceId = state.queue[state.queueIndex]
+        state.activePiece = { pieceId, position: spawnPos, orientation: 0 }
+        state.queueIndex = (state.queueIndex + 1) % state.queue.length
     }
 
     onMount(() => {
@@ -387,26 +417,36 @@ export const App: Component = () => {
                 updateInput()
 
                 if (!state.activePiece) {
-                    const spawnPos = vec(Math.floor(gameConfig.boardSize.x / 2) - 1, gameConfig.boardSize.y)
-                    const pieceId = state.queue[state.pieceIndex]
-                    // TODO: piece selection
-                    state.activePiece = { pieceId, position: spawnPos, orientation: 0 }
+                    spawnPiece(state)
                 }
 
                 updatePiece()
+
+                if (input.hold.pressed && state.holdAvailable) {
+                    state.holdAvailable = false
+                    if (state.holdPiece) {
+                        const next = state.holdPiece
+                        state.holdPiece = state.activePiece!.pieceId
+                        spawnPiece(state, next)
+                    } else {
+                        state.holdPiece = state.activePiece!.pieceId
+                        spawnPiece(state)
+                    }
+                }
             })
         )
         subs.push(
             engine.eventDispatcher.beforeDraw.subscribe(() => {
                 ctx.clear()
                 drawBoard(state.board)
-                drawQueue(state.queue, state.pieceIndex)
+                drawQueue(state)
+                drawHold(state)
                 if (state.activePiece) {
                     drawPiece(state.activePiece, {
                         fill: gameConfig.colors[state.activePiece.pieceId + 3],
                         stroke: gameConfig.colors[1]
                     })
-                    drawGhost(state.board, state.activePiece)
+                    drawGhost(state, state.activePiece)
                 }
             })
         )
