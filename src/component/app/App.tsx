@@ -1,5 +1,5 @@
 import { Engine, Vector, vec } from '@vole-engine/core'
-import { Context } from '@vole-engine/draw'
+import { Context, DrawOptions } from '@vole-engine/draw'
 import { Subscription } from 'rxjs'
 import { type Component, onCleanup, onMount } from 'solid-js'
 import './App.module.scss'
@@ -176,6 +176,7 @@ export const gameConfig = {
         '#5386e4',
         '#f55d3e'
     ],
+    blockLineWidth: 1,
     keyMap: {
         left: 'KeyA',
         right: 'KeyD',
@@ -219,25 +220,33 @@ export const App: Component = () => {
 
         for (let j = 0; j < gameConfig.boardSize.x; j++) {
             for (let i = 0; i < Math.max(gameConfig.boardSize.y, board.length); i++) {
-                const piecePos = vec(j, i)
-                const pos = boardToScreen(piecePos)
+                const pos = vec(j, i)
                 if (board.length > i) {
-                    const value = board[i][j]
-                    const fill = gameConfig.colors[value]
-                    ctx.rect(pos, gameConfig.blockScreenSize, { fill, stroke })
+                    drawBlock(pos, { fill: gameConfig.colors[board[i][j]], stroke: gameConfig.colors[1] })
                 } else {
-                    ctx.rect(pos, gameConfig.blockScreenSize, gridOpts)
+                    ctx.rect(boardToScreen(pos), gameConfig.blockScreenSize, gridOpts)
                 }
             }
         }
     }
 
-    const drawPiece = (piece: ActivePiece): void => {
-        const opts = { fill: gameConfig.colors[piece.pieceId + 3], stroke: gameConfig.colors[1] }
+    const drawPiece = (piece: ActivePiece, opts: DrawOptions): void => {
+        pieceBoardPos(piece).blocks.forEach(pos => drawBlock(pos, opts))
+    }
 
-        pieceBoardPos(piece).blocks.forEach(pos => {
-            ctx.rect(boardToScreen(pos), gameConfig.blockScreenSize, opts)
-        })
+    const drawGhost = (board: Board, piece: ActivePiece): void => {
+        const ghost: ActivePiece = { pieceId: piece.pieceId, position: piece.position, orientation: piece.orientation }
+        while (!collides(board, ghost)) {
+            ghost.position = ghost.position.add(vec(0, -1))
+        }
+        ghost.position = ghost.position.add(vec(0, 1))
+        if (piece.position.y === ghost.position.y) return
+
+        drawPiece(ghost, { stroke: gameConfig.colors[piece.pieceId + 3] })
+    }
+
+    const drawBlock = (pos: Vector, opts: DrawOptions): void => {
+        ctx.rect(boardToScreen(pos), gameConfig.blockScreenSize, { ...opts, lineWidth: gameConfig.blockLineWidth })
     }
 
     const pieceBoardPos = (piece: ActivePiece): Piece => {
@@ -366,7 +375,11 @@ export const App: Component = () => {
                 ctx.clear()
                 drawBoard(board)
                 if (activePiece) {
-                    drawPiece(activePiece!)
+                    drawPiece(activePiece, {
+                        fill: gameConfig.colors[activePiece.pieceId + 3],
+                        stroke: gameConfig.colors[1]
+                    })
+                    drawGhost(board, activePiece)
                 }
             })
         )
