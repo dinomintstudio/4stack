@@ -230,7 +230,15 @@ export const App: Component = () => {
             }
             board[pos.y][pos.x] = piece.pieceId + 3
         })
-        console.log(JSON.stringify(board))
+    }
+
+    const clearLines = (board: Board): void => {
+        for (let i = board.length - 1; i >= 0; i--) {
+            const line = board[i]
+            if (line.every(b => b > 0)) {
+                board.splice(i, 1)
+            }
+        }
     }
 
     const collides = (board: Board, piece: ActivePiece): boolean => {
@@ -298,6 +306,7 @@ export const App: Component = () => {
             // TODO: will ascend if not checked for game over
             activePiece.position = activePiece.position.add(vec(0, 1))
             insertPiece(board, activePiece)
+            clearLines(board)
             activePiece = undefined
         }
     }
