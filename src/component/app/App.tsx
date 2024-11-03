@@ -146,13 +146,13 @@ export const gameConfig = {
         'transparent',
         '#333333',
         '#555555',
-        '#25e4f4',
-        '#fded02',
-        '#af20fe',
-        '#01a252',
-        '#db2d20',
-        '#0160f4',
-        '#ee6522'
+        '#9fd8cb',
+        '#e3b505',
+        '#c589e8',
+        '#2b9720',
+        '#a72608',
+        '#5386e4',
+        '#f55d3e'
     ],
     keyMap: {
         left: 'KeyA',
@@ -185,56 +185,57 @@ export const App: Component = () => {
         const blockSize = gameConfig.blockScreenSize
         const boardSize = gameConfig.boardSize.add(vec(0, 2)).scale(blockSize)
         const boardCenter = boardSize.scale(0.5)
-        return v.add(vec(0.5, 0.5)).scale(blockSize).add(boardCenter.negate()).scale(vec(1, -1)).add(screenCenter)
+        const res = v.add(vec(0.5, 0.5)).scale(blockSize).add(boardCenter.negate()).scale(vec(1, -1)).add(screenCenter)
+        return vec(Math.floor(res.x), Math.floor(res.y))
     }
 
     const drawBoard = (board: Board): void => {
-        const gridOpts = { fill: gameConfig.colors[0], stroke: gameConfig.colors[1] }
+        const stroke = gameConfig.colors[1]
+        const gridOpts = { fill: gameConfig.colors[0], stroke }
 
         for (let j = 0; j < gameConfig.boardSize.x; j++) {
             for (let i = 0; i < Math.max(gameConfig.boardSize.y, board.length); i++) {
                 const piecePos = vec(j, i)
                 const pos = boardToScreen(piecePos)
                 if (board.length > i) {
-                    ctx.rect(pos, gameConfig.blockScreenSize, {
-                        fill: gameConfig.colors[board[i][j]],
-                        stroke: gameConfig.colors[1]
-                    })
+                    const value = board[i][j]
+                    const fill = gameConfig.colors[value]
+                    ctx.rect(pos, gameConfig.blockScreenSize, { fill, stroke })
+                } else {
+                    ctx.rect(pos, gameConfig.blockScreenSize, gridOpts)
                 }
-                ctx.rect(pos, gameConfig.blockScreenSize, gridOpts)
             }
         }
     }
 
-    const drawActivePiece = (activePiece: ActivePiece): void => {
-        const opts = { fill: gameConfig.colors[activePiece.pieceId + 3], stroke: gameConfig.colors[1] }
+    const drawPiece = (piece: ActivePiece): void => {
+        const opts = { fill: gameConfig.colors[piece.pieceId + 3], stroke: gameConfig.colors[1] }
 
-        activePieceBoardPos(activePiece).blocks.forEach(pos => {
+        pieceBoardPos(piece).blocks.forEach(pos => {
             ctx.rect(boardToScreen(pos), gameConfig.blockScreenSize, opts)
         })
     }
 
-    const activePieceBoardPos = (activePiece: ActivePiece): Piece => {
+    const pieceBoardPos = (piece: ActivePiece): Piece => {
         return {
-            blocks: pieces[activePiece.pieceId].orientations[activePiece.orientation].blocks.map(b =>
-                activePiece.position.add(b)
-            )
+            blocks: pieces[piece.pieceId].orientations[piece.orientation].blocks.map(b => piece.position.add(b))
         }
     }
 
-    const insertPiece = (board: Board, activePiece: ActivePiece): void => {
-        activePieceBoardPos(activePiece).blocks.forEach(pos => {
+    const insertPiece = (board: Board, piece: ActivePiece): void => {
+        pieceBoardPos(piece).blocks.forEach(pos => {
             const missingLines = 1 + pos.y - board.length
             for (let i = 0; i < missingLines; i++) {
                 board.push(new Array(gameConfig.boardSize.x).fill(0))
             }
-            board[pos.y][pos.x] = activePiece.pieceId + 3
+            board[pos.y][pos.x] = piece.pieceId + 3
         })
+        console.log(JSON.stringify(board))
     }
 
-    const collides = (board: Board, activePiece: ActivePiece): boolean => {
-        const activeBlocks = activePieceBoardPos(activePiece)
-        return activeBlocks.blocks.some(pos => {
+    const collides = (board: Board, piece: ActivePiece): boolean => {
+        const blocks = pieceBoardPos(piece)
+        return blocks.blocks.some(pos => {
             if (pos.x < 0 || pos.x >= gameConfig.boardSize.x || pos.y < 0) return true
             if (pos.y >= board.length) return false
             const boardBlock = board[pos.y][pos.x]
@@ -263,7 +264,7 @@ export const App: Component = () => {
         })
     }
 
-    const updateActivePiece = (): void => {
+    const updatePiece = (): void => {
         if (!activePiece) throw Error()
         const originalPos = activePiece.position
 
@@ -320,7 +321,7 @@ export const App: Component = () => {
                     activePiece = { pieceId, position: spawnPos, orientation: 0 }
                 }
 
-                updateActivePiece()
+                updatePiece()
             })
         )
         subs.push(
@@ -328,7 +329,7 @@ export const App: Component = () => {
                 ctx.clear()
                 drawBoard(board)
                 if (activePiece) {
-                    drawActivePiece(activePiece!)
+                    drawPiece(activePiece!)
                 }
             })
         )
