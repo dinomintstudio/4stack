@@ -614,15 +614,13 @@ export const App: Component = () => {
 
     const spawnPiece = (state: State, pieceId?: number): void => {
         const spawnPos = vec(Math.floor(config.boardSize.x / 2) - 1, config.boardSize.y + 1)
-        if (pieceId !== undefined) {
-            state.activePiece = { pieceId, position: spawnPos, orientation: 0 }
-            return
+        if (pieceId === undefined) {
+            pieceId = state.queue[state.queueIndex]
+            state.queueIndex = (state.queueIndex + 1) % state.queue.length
         }
-        pieceId = state.queue[state.queueIndex]
         state.activePiece = { pieceId, position: spawnPos, orientation: 0 }
         state.truePieceY = state.activePiece.position.y
         state.lockResets = 0
-        state.queueIndex = (state.queueIndex + 1) % state.queue.length
 
         if (collides(state.board, state.activePiece)) {
             gameOver()
