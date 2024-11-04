@@ -76,7 +76,13 @@ export type Color = number
 export type PieceDescription = {
     blocks: Vector[]
     rotationMode: 'normal' | 'between' | 'off'
+    wallKickTable: WallKickTable
 }
+
+/**
+ * Wall kick table in format [fromOrient][toOrient]?.[testNo]
+ */
+export type WallKickTable = Vector[][][]
 
 export type Piece = {
     blocks: Vector[]
@@ -155,41 +161,122 @@ export type State = {
 
 export const dt = 1 / 60
 
+/*       Test 1   Test 2   Test 3   Test 4   Test 5
+ * 0->R  ( 0, 0)  (-1, 0)  (-1,+1)  ( 0,-2)  (-1,-2)
+ * R->0  ( 0, 0)  (+1, 0)  (+1,-1)  ( 0,+2)  (+1,+2)
+ * R->2  ( 0, 0)  (+1, 0)  (+1,-1)  ( 0,+2)  (+1,+2)
+ * 2->R  ( 0, 0)  (-1, 0)  (-1,+1)  ( 0,-2)  (-1,-2)
+ * 2->L  ( 0, 0)  (+1, 0)  (+1,+1)  ( 0,-2)  (+1,-2)
+ * L->2  ( 0, 0)  (-1, 0)  (-1,-1)  ( 0,+2)  (-1,+2)
+ * L->0  ( 0, 0)  (-1, 0)  (-1,-1)  ( 0,+2)  (-1,+2)
+ * 0->L  ( 0, 0)  (+1, 0)  (+1,+1)  ( 0,-2)  (+1,-2)
+ */
+export const normalWallKickTable: WallKickTable = [
+    [
+        [vec(0, 0)],
+        [vec(0, 0), vec(-1, 0), vec(-1, 1), vec(0, -2), vec(-1, -2)],
+        [vec(0, 0)], // TODO: 180 kick
+        [vec(0, 0), vec(1, 0), vec(1, 1), vec(0, -2), vec(1, -2)]
+    ],
+    [
+        [vec(0, 0), vec(1, 0), vec(1, -1), vec(0, 2), vec(1, 2)],
+        [vec(0, 0)],
+        [vec(0, 0), vec(1, 0), vec(1, -1), vec(0, 2), vec(1, 2)],
+        [vec(0, 0)] // TODO: 180 kick
+    ],
+    [
+        [vec(0, 0)], // TODO: 180 kick
+        [vec(0, 0), vec(-1, 0), vec(-1, 1), vec(0, -2), vec(-1, -2)],
+        [vec(0, 0)],
+        [vec(0, 0), vec(1, 0), vec(1, 1), vec(0, -2), vec(1, -2)]
+    ],
+    [
+        [vec(0, 0), vec(-1, 0), vec(-1, -1), vec(0, 2), vec(-1, 2)],
+        [vec(0, 0)], // TODO: 180 kick
+        [vec(0, 0), vec(-1, 0), vec(-1, -1), vec(0, 2), vec(-1, 2)],
+        [vec(0, 0)]
+    ]
+]
+
+/**      Test 1   Test 2   Test 3   Test 4   Test 5
+ * 0->R  ( 0, 0)  (-2, 0)  (+1, 0)  (-2,-1)  (+1,+2)
+ * R->0  ( 0, 0)  (+2, 0)  (-1, 0)  (+2,+1)  (-1,-2)
+ * R->2  ( 0, 0)  (-1, 0)  (+2, 0)  (-1,+2)  (+2,-1)
+ * 2->R  ( 0, 0)  (+1, 0)  (-2, 0)  (+1,-2)  (-2,+1)
+ * 2->L  ( 0, 0)  (+2, 0)  (-1, 0)  (+2,+1)  (-1,-2)
+ * L->2  ( 0, 0)  (-2, 0)  (+1, 0)  (-2,-1)  (+1,+2)
+ * L->0  ( 0, 0)  (+1, 0)  (-2, 0)  (+1,-2)  (-2,+1)
+ * 0->L  ( 0, 0)  (-1, 0)  (+2, 0)  (-1,+2)  (+2,-1)
+ */
+export const iPieceWallKickTable: WallKickTable = [
+    [
+        [vec(0, 0)],
+        [vec(0, 0), vec(-2, 0), vec(1, 1), vec(-2, -1), vec(1, 2)],
+        [vec(0, 0)], // TODO: 180 kick
+        [vec(0, 0), vec(-1, 0), vec(2, 0), vec(-1, 2), vec(2, -1)]
+    ],
+    [
+        [vec(0, 0), vec(2, 0), vec(-1, 0), vec(2, 1), vec(-1, -2)],
+        [vec(0, 0)],
+        [vec(0, 0), vec(-1, 0), vec(2, 0), vec(-1, 2), vec(2, -1)],
+        [vec(0, 0)] // TODO: 180 kick
+    ],
+    [
+        [vec(0, 0)], // TODO: 180 kick
+        [vec(0, 0), vec(1, 0), vec(-2, 0), vec(1, -2), vec(-2, 1)],
+        [vec(0, 0)],
+        [vec(0, 0), vec(2, 0), vec(-1, 0), vec(2, 1), vec(-1, -2)]
+    ],
+    [
+        [vec(0, 0), vec(1, 0), vec(-2, 0), vec(1, -2), vec(-2, 1)],
+        [vec(0, 0)], // TODO: 180 kick
+        [vec(0, 0), vec(-2, 0), vec(1, 0), vec(-2, -1), vec(1, 2)],
+        [vec(0, 0)]
+    ]
+]
+
 export const piecesDescription: PieceDescription[] = [
     {
         // I piece
         blocks: [vec(0, 0), vec(-1, 0), vec(1, 0), vec(2, 0)],
-        rotationMode: 'between'
+        rotationMode: 'between',
+        wallKickTable: iPieceWallKickTable
     },
     {
         // O piece
         blocks: [vec(0, 0), vec(1, 0), vec(1, 1), vec(0, 1)],
-        rotationMode: 'off'
+        rotationMode: 'off',
+        wallKickTable: normalWallKickTable
     },
     {
         // T piece
         blocks: [vec(0, 0), vec(0, 1), vec(1, 0), vec(-1, 0)],
-        rotationMode: 'normal'
+        rotationMode: 'normal',
+        wallKickTable: normalWallKickTable
     },
     {
         // S piece
         blocks: [vec(0, 0), vec(-1, 0), vec(0, 1), vec(1, 1)],
-        rotationMode: 'normal'
+        rotationMode: 'normal',
+        wallKickTable: normalWallKickTable
     },
     {
         // Z piece
         blocks: [vec(0, 0), vec(1, 0), vec(0, 1), vec(-1, 1)],
-        rotationMode: 'normal'
+        rotationMode: 'normal',
+        wallKickTable: normalWallKickTable
     },
     {
         // J piece
         blocks: [vec(0, 0), vec(-1, 1), vec(-1, 0), vec(1, 0)],
-        rotationMode: 'normal'
+        rotationMode: 'normal',
+        wallKickTable: normalWallKickTable
     },
     {
         // L piece
         blocks: [vec(0, 0), vec(1, 1), vec(1, 0), vec(-1, 0)],
-        rotationMode: 'normal'
+        rotationMode: 'normal',
+        wallKickTable: normalWallKickTable
     }
 ]
 
@@ -236,6 +323,7 @@ export const config = {
         hold: 'KeyI'
     },
     // TODO: fractional rates
+    // TODO: 0F rates
     handling: {
         arr: 2,
         das: 10,
@@ -260,7 +348,7 @@ export const App: Component = () => {
         truePieceY: undefined,
         frameDropped: undefined,
         lockResets: 0,
-        queue: generateQueue(piecesDescription, piecesDescription.length),
+        queue: generateQueue(piecesDescription, piecesDescription.length * 64),
         queueIndex: 0,
         holdAvailable: true
     }
@@ -422,9 +510,6 @@ export const App: Component = () => {
         })
     }
 
-    /**
-     * TODO: support 0F rates
-     */
     const buttonFires = (button: Button, startDelay: number, repeatRate: number): boolean => {
         if (button.pressed) return true
         if (button.pressedFrame) {
@@ -436,57 +521,69 @@ export const App: Component = () => {
     }
 
     const updatePiece = (): void => {
-        if (!state.activePiece) throw Error()
+        const piece = state.activePiece
+        if (!piece) throw Error()
 
-        const originalPos = state.activePiece.position
+        let originalPos = piece.position
         const checkPos = () => {
-            if (collides(state.board, state.activePiece!)) {
-                state.activePiece!.position = originalPos
+            if (collides(state.board, piece)) {
+                piece.position = originalPos
             } else {
                 lockReset(state)
             }
         }
         if (buttonFires(input.right, config.handling.das, config.handling.arr)) {
-            state.activePiece.position = state.activePiece.position.add(vec(1, 0))
+            piece.position = piece.position.add(vec(1, 0))
             checkPos()
         }
         if (buttonFires(input.left, config.handling.das, config.handling.arr)) {
-            state.activePiece.position = state.activePiece.position.add(vec(-1, 0))
+            piece.position = piece.position.add(vec(-1, 0))
             checkPos()
         }
 
-        const originalOrient = state.activePiece.orientation
+        originalPos = piece.position
+        const originalOrient = piece.orientation
         const checkOrient = () => {
-            // TODO: wall kicks
-            if (collides(state.board, state.activePiece!)) {
-                state.activePiece!.orientation = originalOrient
+            const wallKickTable = piecesDescription[piece.pieceId].wallKickTable
+            const tests = wallKickTable[originalOrient][piece.orientation]
+            for (const test of tests) {
+                piece.position = piece.position.add(test)
+                if (!collides(state.board, piece)) {
+                    lockReset(state)
+                    break
+                } else {
+                    piece.position = originalPos
+                }
+            }
+            if (collides(state.board, piece)) {
+                piece.orientation = originalOrient
             } else {
                 lockReset(state)
             }
         }
         if (input.cw.pressed) {
-            state.activePiece.orientation = (state.activePiece.orientation + 1) % 4
+            piece.orientation = (piece.orientation + 1) % 4
             checkOrient()
         }
         if (input.ccw.pressed) {
-            state.activePiece.orientation = (state.activePiece.orientation + 3) % 4
+            piece.orientation = (piece.orientation + 3) % 4
             checkOrient()
         }
         if (input.r180.pressed) {
-            state.activePiece.orientation = (state.activePiece.orientation + 2) % 4
+            piece.orientation = (piece.orientation + 2) % 4
             checkOrient()
         }
 
         const softDropRepeatRate = Math.floor(1 / (config.game.gravity * config.handling.sdf))
         if (buttonFires(input.soft, 0, softDropRepeatRate)) {
-            if (canFell(state.board, state.activePiece)) {
-                state.activePiece.position = state.activePiece.position.add(vec(0, -1))
+            if (canFell(state.board, piece)) {
+                piece.position = piece.position.add(vec(0, -1))
             }
         }
 
         if (input.hard.pressed) {
-            while (canFell(state.board, state.activePiece)) {
-                state.activePiece.position = state.activePiece.position.add(vec(0, -1))
+            while (canFell(state.board, piece)) {
+                piece.position = piece.position.add(vec(0, -1))
             }
             lockPiece(state)
         }
