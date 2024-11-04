@@ -444,7 +444,7 @@ export const App: Component = () => {
         }
         if (piece.position.y === ghost.position.y) return
 
-        drawPiece(ghost, { stroke: config.visual.colors[piece.pieceId + 3], lineWidth: 2 })
+        drawPiece(ghost, { stroke: config.visual.colors[piece.pieceId + 3] })
     }
 
     const insertPiece = (board: Board, piece: ActivePiece): void => {
