@@ -260,7 +260,7 @@ export const App: Component = () => {
         truePieceY: undefined,
         frameDropped: undefined,
         lockResets: 0,
-        queue: generateQueue(piecesDescription, piecesDescription.length * 64),
+        queue: generateQueue(piecesDescription, piecesDescription.length),
         queueIndex: 0,
         holdAvailable: true
     }
@@ -317,8 +317,9 @@ export const App: Component = () => {
     const drawQueue = (state: State): void => {
         const { colors } = config.visual
         const offset = vec(2.5, 0)
-        // TODO: won't show pieces when wrapping queue around
-        state.queue.slice(state.queueIndex, state.queueIndex + config.visual.visibleQueuePieces).forEach(pieceId => {
+        for (let i = state.queueIndex; i < state.queueIndex + config.visual.visibleQueuePieces; i++) {
+            const idx = i % state.queue.length
+            const pieceId = state.queue[idx]
             const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
             offset.y -= height
             const rotationModeOffset = vec(piecesDescription[pieceId].rotationMode === 'normal' ? 0 : -0.5, 0)
@@ -327,7 +328,7 @@ export const App: Component = () => {
                 { fill: colors[pieceId + 3], stroke: colors[1] }
             )
             offset.y -= 1
-        })
+        }
     }
 
     const drawHold = (state: State): void => {
