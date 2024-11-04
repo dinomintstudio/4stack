@@ -337,12 +337,13 @@ export const config = {
 }
 
 export const App: Component = () => {
-    let canvas!: HTMLCanvasElement
-    let ctx!: Context
-    let engine!: Engine
+    let canvas: HTMLCanvasElement
+    let ctx: Context
+    let engine: Engine
     const subs: Subscription[] = []
+    let state: State
 
-    const state: State = {
+    const createState = () => ({
         board: [],
         activePiece: undefined,
         truePieceY: undefined,
@@ -351,7 +352,7 @@ export const App: Component = () => {
         queue: generateQueue(piecesDescription, piecesDescription.length * 64),
         queueIndex: 0,
         holdAvailable: true
-    }
+    })
 
     const resizeWindow = (): void => {
         canvas.width = window.innerWidth
@@ -456,13 +457,15 @@ export const App: Component = () => {
         })
     }
 
-    const clearLines = (board: Board): void => {
+    const clearLines = (board: Board): number => {
+        const len = board.length
         for (let i = board.length - 1; i >= 0; i--) {
             const line = board[i]
             if (line.every(b => b > 0)) {
                 board.splice(i, 1)
             }
         }
+        return len - board.length
     }
 
     const collides = (board: Board, piece: ActivePiece): boolean => {
@@ -598,7 +601,13 @@ export const App: Component = () => {
 
     const lockPiece = (state: State): void => {
         insertPiece(state.board, state.activePiece!)
-        clearLines(state.board)
+        const clearedLines = clearLines(state.board)
+
+        const lowestY = Math.min(...pieceBoardPos(state.activePiece!).blocks.map(b => b.y))
+        if (lowestY - clearedLines > config.boardSize.y - 1) {
+            gameOver()
+        }
+
         state.holdAvailable = true
         state.activePiece = undefined
     }
@@ -614,6 +623,14 @@ export const App: Component = () => {
         state.truePieceY = state.activePiece.position.y
         state.lockResets = 0
         state.queueIndex = (state.queueIndex + 1) % state.queue.length
+
+        if (collides(state.board, state.activePiece)) {
+            gameOver()
+        }
+    }
+
+    const gameOver = (): void => {
+        state = createState()
     }
 
     onMount(() => {
@@ -624,6 +641,8 @@ export const App: Component = () => {
 
         engine = new Engine()
         engine.start()
+        state = createState()
+
         subs.push(
             engine.eventDispatcher.beforeUpdate.subscribe(() => {
                 const currentFrame = engine.frameInfo.id
@@ -632,6 +651,8 @@ export const App: Component = () => {
                 if (!state.activePiece) {
                     spawnPiece(state)
                 }
+                // no piece after spawn because of game over
+                if (!state.activePiece) return
 
                 state.truePieceY! -= config.game.gravity
                 const targetY = Math.ceil(state.truePieceY!)
@@ -693,7 +714,7 @@ export const App: Component = () => {
 
     return (
         <div class="App">
-            <canvas ref={canvas} />
+            <canvas ref={canvas!} />
         </div>
     )
 }
