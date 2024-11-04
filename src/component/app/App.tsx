@@ -677,7 +677,7 @@ export const App: Component = () => {
 
                 if (input.hold.pressed && state.holdAvailable) {
                     state.holdAvailable = false
-                    if (state.holdPiece) {
+                    if (state.holdPiece !== undefined) {
                         const next = state.holdPiece
                         state.holdPiece = state.activePiece!.pieceId
                         spawnPiece(state, next)
