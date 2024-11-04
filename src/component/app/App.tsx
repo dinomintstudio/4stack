@@ -104,22 +104,52 @@ export type Input = {
 }
 
 export type Button = {
+    /**
+     * True if button was *down* on the last frame
+     */
     held: boolean
+    /**
+     * True if button is currently down
+     */
     down: boolean
+    /**
+     * True only on the first frame after a key press
+     */
     pressed: boolean
+    /**
+     * True only on the first frame after a key release
+     */
     released: boolean
+    /**
+     * Frame id of the latest key press
+     */
     pressedFrame?: number
 }
 
 export type State = {
     board: Board
     activePiece?: ActivePiece
+    /**
+     * Fractional piece position
+     */
     truePieceY?: number
+    /**
+     * Frame id of the first frame where piece is *dropped* (can no longer fall)
+     */
     frameDropped?: number
+    /**
+     * Number of lock resets used for the active piece
+     */
     lockResets: number
+    /**
+     * Unmodifiable list of pieces the game goes through
+     */
     queue: Queue
     queueIndex: number
     holdPiece?: number
+    /**
+     * False if hold action was already used for the active piece
+     */
     holdAvailable: boolean
 }
 
@@ -178,21 +208,23 @@ export const input: Input = {
 
 export const config = {
     boardSize: vec(10, 20),
-    blockScreenSize: vec(40, 40),
-    colors: [
-        'transparent',
-        '#333333',
-        '#555555',
-        '#9fd8cb',
-        '#e3b505',
-        '#c589e8',
-        '#2b9720',
-        '#a72608',
-        '#5386e4',
-        '#f55d3e'
-    ],
-    blockLineWidth: 1,
-    visibleQueuePieces: 4,
+    visual: {
+        blockScreenSize: vec(40, 40),
+        colors: [
+            'transparent',
+            '#333333',
+            '#555555',
+            '#9fd8cb',
+            '#e3e500',
+            '#c589e8',
+            '#2b9720',
+            '#d04638',
+            '#5386e4',
+            '#e58d3e'
+        ],
+        blockLineWidth: 1,
+        visibleQueuePieces: 4
+    },
     keyMap: {
         left: 'KeyA',
         right: 'KeyD',
@@ -209,7 +241,7 @@ export const config = {
         das: 10,
         sdf: 20
     },
-    gameConfig: {
+    game: {
         gravity: 2 / 60,
         lockDelay: 30,
         lockResetLimit: 15
@@ -241,7 +273,7 @@ export const App: Component = () => {
     const boardToScreen = (v: Vector): Vector => {
         const screenSize = vec(canvas.width, canvas.height)
         const screenCenter = screenSize.scale(0.5)
-        const blockSize = config.blockScreenSize
+        const blockSize = config.visual.blockScreenSize
         const viewSize = config.boardSize.add(vec(0, 2)).scale(blockSize)
         const viewCenter = viewSize.scale(0.5)
         const res = v.add(vec(0.5, 0.5)).scale(blockSize).add(viewCenter.negate()).scale(vec(1, -1)).add(screenCenter)
@@ -249,7 +281,10 @@ export const App: Component = () => {
     }
 
     const drawBlock = (pos: Vector, opts: DrawOptions): void => {
-        ctx.rect(boardToScreen(pos), config.blockScreenSize, { ...opts, lineWidth: config.blockLineWidth })
+        ctx.rect(boardToScreen(pos), config.visual.blockScreenSize, {
+            lineWidth: config.visual.blockLineWidth,
+            ...opts
+        })
     }
 
     const pieceBoardPos = (piece: ActivePiece): Piece => {
@@ -263,44 +298,47 @@ export const App: Component = () => {
     }
 
     const drawBoard = (board: Board): void => {
-        const stroke = config.colors[1]
-        const gridOpts = { fill: config.colors[0], stroke }
+        const { colors, blockScreenSize } = config.visual
+        const stroke = colors[1]
+        const gridOpts = { fill: colors[0], stroke }
 
         for (let j = 0; j < config.boardSize.x; j++) {
             for (let i = 0; i < Math.max(config.boardSize.y, board.length); i++) {
                 const pos = vec(j, i)
                 if (board.length > i) {
-                    drawBlock(pos, { fill: config.colors[board[i][j]], stroke: config.colors[1] })
+                    drawBlock(pos, { fill: colors[board[i][j]], stroke: colors[1] })
                 } else {
-                    ctx.rect(boardToScreen(pos), config.blockScreenSize, gridOpts)
+                    ctx.rect(boardToScreen(pos), blockScreenSize, gridOpts)
                 }
             }
         }
     }
 
     const drawQueue = (state: State): void => {
+        const { colors } = config.visual
         const offset = vec(2.5, 0)
         // TODO: won't show pieces when wrapping queue around
-        state.queue.slice(state.queueIndex, state.queueIndex + config.visibleQueuePieces).forEach(pieceId => {
+        state.queue.slice(state.queueIndex, state.queueIndex + config.visual.visibleQueuePieces).forEach(pieceId => {
             const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
             offset.y -= height
             const rotationModeOffset = vec(piecesDescription[pieceId].rotationMode === 'normal' ? 0 : -0.5, 0)
             drawPiece(
                 { pieceId, position: config.boardSize.add(offset).add(rotationModeOffset), orientation: 0 },
-                { fill: config.colors[pieceId + 3], stroke: config.colors[1] }
+                { fill: colors[pieceId + 3], stroke: colors[1] }
             )
             offset.y -= 1
         })
     }
 
     const drawHold = (state: State): void => {
+        const { colors } = config.visual
         if (state.holdPiece !== undefined) {
             const pieceId = state.holdPiece
             const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
             const rotationModeOffset = piecesDescription[pieceId].rotationMode === 'normal' ? 0 : 0.5
             drawPiece(
                 { pieceId, position: vec(-3.5 - rotationModeOffset, config.boardSize.y - height), orientation: 0 },
-                { fill: config.colors[pieceId + 3], stroke: config.colors[1] }
+                { fill: colors[pieceId + 3], stroke: colors[1] }
             )
         }
     }
@@ -316,7 +354,7 @@ export const App: Component = () => {
         }
         if (piece.position.y === ghost.position.y) return
 
-        drawPiece(ghost, { stroke: config.colors[piece.pieceId + 3] })
+        drawPiece(ghost, { stroke: config.visual.colors[piece.pieceId + 3], lineWidth: 2 })
     }
 
     const insertPiece = (board: Board, piece: ActivePiece): void => {
@@ -438,7 +476,7 @@ export const App: Component = () => {
             checkOrient()
         }
 
-        const softDropRepeatRate = Math.floor(1 / (config.gameConfig.gravity * config.handling.sdf))
+        const softDropRepeatRate = Math.floor(1 / (config.game.gravity * config.handling.sdf))
         if (buttonFires(input.soft, 0, softDropRepeatRate)) {
             if (canFell(state.board, state.activePiece)) {
                 state.activePiece.position = state.activePiece.position.add(vec(0, -1))
@@ -455,7 +493,7 @@ export const App: Component = () => {
 
     const lockReset = (state: State): void => {
         if (state.frameDropped === undefined) return
-        if (state.lockResets > config.gameConfig.lockResetLimit) return
+        if (state.lockResets > config.game.lockResetLimit) return
         state.lockResets++
         state.frameDropped = undefined
     }
@@ -497,7 +535,7 @@ export const App: Component = () => {
                     spawnPiece(state)
                 }
 
-                state.truePieceY! -= config.gameConfig.gravity
+                state.truePieceY! -= config.game.gravity
                 const targetY = Math.ceil(state.truePieceY!)
                 while (canFell(state.board, state.activePiece!) && state.activePiece!.position.y > targetY) {
                     state.activePiece!.position = state.activePiece!.position.add(vec(0, -1))
@@ -514,7 +552,7 @@ export const App: Component = () => {
                     } else {
                         state.frameDropped ??= currentFrame
                         const framesSinceDrop = currentFrame - state.frameDropped
-                        if (framesSinceDrop >= config.gameConfig.lockDelay) {
+                        if (framesSinceDrop >= config.game.lockDelay) {
                             lockPiece(state)
                         }
                     }
@@ -540,9 +578,10 @@ export const App: Component = () => {
                 drawQueue(state)
                 drawHold(state)
                 if (state.activePiece) {
+                    const { colors } = config.visual
                     drawPiece(state.activePiece, {
-                        fill: config.colors[state.activePiece.pieceId + 3],
-                        stroke: config.colors[1]
+                        fill: colors[state.activePiece.pieceId + 3],
+                        stroke: colors[1]
                     })
                     drawGhost(state, state.activePiece)
                 }
