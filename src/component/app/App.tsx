@@ -2,7 +2,7 @@ import { Engine, Vector, vec } from '@vole-engine/core'
 import { Context, DrawOptions } from '@vole-engine/draw'
 import { Subscription } from 'rxjs'
 import { Component, createSignal, onCleanup, onMount } from 'solid-js'
-import { Schema } from '../../schema'
+import { Schema, conformSchema } from '../../schema'
 import { Settings } from '../settings/Settings'
 import './App.module.scss'
 
@@ -325,16 +325,16 @@ export const userSettingsSchema: Schema = {
     }
 }
 
-export const [userSettings, setUserSettings] = createSignal({
+export const defaultUserSettings = {
     keyMap: {
-        left: 'KeyA',
-        right: 'KeyD',
-        ccw: 'KeyJ',
-        cw: 'KeyL',
-        r180: 'KeyK',
-        soft: 'KeyS',
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        cw: 'KeyZ',
+        ccw: 'KeyX',
+        r180: 'KeyA',
+        soft: 'ArrowDown',
         hard: 'Space',
-        hold: 'KeyI'
+        hold: 'KeyC'
     },
     // TODO: fractional rates
     // TODO: 0F rates
@@ -342,9 +342,13 @@ export const [userSettings, setUserSettings] = createSignal({
     handling: {
         arr: 2,
         das: 10,
-        sdf: 20
+        sdf: 6
     }
-})
+}
+
+export const [initialUserSettings, setInitialUserSettings] = createSignal(defaultUserSettings)
+
+export const [userSettings, setUserSettings] = createSignal(defaultUserSettings)
 
 export const config = {
     boardSize: vec(10, 20),
@@ -667,7 +671,34 @@ export const App: Component = () => {
         state = createState()
     }
 
+    const loadUserSettings = (): void => {
+        let v: any
+        try {
+            v = localStorage.getItem('userSettings')
+            v = v ? JSON.parse(v) : defaultUserSettings
+            conformSchema(v, userSettingsSchema)
+        } catch (e) {
+            console.error(`invalid user settings: \`${JSON.stringify(v)}\``, e)
+            setInitialUserSettings(defaultUserSettings)
+            setUserSettings(defaultUserSettings)
+            return
+        }
+        setInitialUserSettings(v)
+        setUserSettings(v)
+    }
+
+    const saveUserSettings = (): void => {
+        localStorage.setItem('userSettings', JSON.stringify(userSettings()))
+    }
+
+    const updateUserSettings = (v: any): void => {
+        setUserSettings(v)
+        saveUserSettings()
+    }
+
     onMount(() => {
+        loadUserSettings()
+
         ctx = new Context(canvas)
         resizeWindow()
         window.addEventListener('resize', resizeWindow)
@@ -748,7 +779,7 @@ export const App: Component = () => {
 
     return (
         <div class="App">
-            <Settings schema={userSettingsSchema} settings={userSettings} onChange={setUserSettings} />
+            <Settings schema={userSettingsSchema} initialSettings={initialUserSettings} onChange={updateUserSettings} />
             <canvas ref={canvas!} />
         </div>
     )

@@ -4,20 +4,18 @@ import './Settings.module.scss'
 
 export type SettingsProps = {
     schema: Schema
-    settings: Accessor<any>
+    initialSettings: Accessor<any>
     onChange?: (settings: any) => void
 }
 
 export const Settings: Component<SettingsProps> = props => {
+    const structuredValue = () => conformSchema(props.initialSettings(), props.schema)
     return (
         <div class="Settings">
             <table>
                 <thead />
                 <tbody>
-                    <Section
-                        value={conformSchema(props.settings(), props.schema)}
-                        onChange={v => props.onChange?.(flattenValue(v))}
-                    />
+                    <Section value={structuredValue()} onChange={v => props.onChange?.(flattenValue(v))} />
                 </tbody>
             </table>
         </div>
@@ -58,11 +56,15 @@ export type SettingProps = {
 }
 
 const Setting: Component<SettingProps> = props => {
-    const onInput = (e: Event) => {
+    const onNumInput = (e: Event) => {
         const v = (e.target as HTMLInputElement).value
         const n = Number.parseInt(v)
         if (Number.isNaN(n)) return
-        props.onChange?.({ ...props.setting, value: v } as any)
+        props.onChange?.({ ...props.setting, value: n } as any)
+    }
+    const onKeyInput = (e: Event) => {
+        const value = (e.target as HTMLInputElement).value
+        props.onChange?.({ ...props.setting, value } as any)
     }
     return (
         <tr title={props.setting.schema.description}>
@@ -73,11 +75,15 @@ const Setting: Component<SettingProps> = props => {
                         <input
                             type="number"
                             value={props.setting.type === 'number' && props.setting.value}
-                            onInput={onInput}
+                            onInput={onNumInput}
                         />
                     </Match>
                     <Match when={props.setting.type === 'key'}>
-                        <input type="text" value={props.setting.type === 'key' && props.setting.value} />
+                        <input
+                            type="text"
+                            value={props.setting.type === 'key' && props.setting.value}
+                            onInput={onKeyInput}
+                        />
                     </Match>
                 </Switch>
             </td>
