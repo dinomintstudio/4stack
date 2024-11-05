@@ -346,8 +346,6 @@ export const defaultUserSettings = {
     }
 }
 
-export const [initialUserSettings, setInitialUserSettings] = createSignal(defaultUserSettings)
-
 export const [userSettings, setUserSettings] = createSignal(defaultUserSettings)
 
 export const config = {
@@ -679,11 +677,9 @@ export const App: Component = () => {
             conformSchema(v, userSettingsSchema)
         } catch (e) {
             console.error(`invalid user settings: \`${JSON.stringify(v)}\``, e)
-            setInitialUserSettings(defaultUserSettings)
             setUserSettings(defaultUserSettings)
             return
         }
-        setInitialUserSettings(v)
         setUserSettings(v)
     }
 
@@ -779,7 +775,7 @@ export const App: Component = () => {
 
     return (
         <div class="App">
-            <Settings schema={userSettingsSchema} initialSettings={initialUserSettings} onChange={updateUserSettings} />
+            <Settings schema={userSettingsSchema} initialSettings={userSettings} onChange={updateUserSettings} />
             <canvas ref={canvas!} />
         </div>
     )
