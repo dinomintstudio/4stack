@@ -8,7 +8,16 @@ body {
     color: white;
 }
 
+input {
+    background-color: #222222;
+    color: white;
+    border: 1px solid #555555;
+    padding-block: 2px;
+    padding-inline: 0;
+}
+
 * {
+    box-sizing: border-box;
     font-family: monospace;
 }
 

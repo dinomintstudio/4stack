@@ -1,10 +1,11 @@
 import { Accessor, Component, For, Match, Switch } from 'solid-js'
-import { Schema, StructuredValue, conformSchema } from '../../schema'
+import { Schema, StructuredValue, conformSchema, flattenValue } from '../../schema'
 import './Settings.module.scss'
 
 export type SettingsProps = {
     schema: Schema
     settings: Accessor<any>
+    onChange?: (settings: any) => void
 }
 
 export const Settings: Component<SettingsProps> = props => {
@@ -13,7 +14,10 @@ export const Settings: Component<SettingsProps> = props => {
             <table>
                 <thead />
                 <tbody>
-                    <Section value={conformSchema(props.settings(), props.schema)} />
+                    <Section
+                        value={conformSchema(props.settings(), props.schema)}
+                        onChange={v => props.onChange?.(flattenValue(v))}
+                    />
                 </tbody>
             </table>
         </div>
@@ -22,9 +26,13 @@ export const Settings: Component<SettingsProps> = props => {
 
 export type SectionProps = {
     value: StructuredValue
+    onChange?: (v: StructuredValue) => void
 }
 
 const Section: Component<SectionProps> = props => {
+    const onChange = (key: string, v: StructuredValue) => {
+        props.onChange?.({ ...props.value, items: { ...(props.value as any).items, [key]: v } } as any)
+    }
     return (
         <>
             <Switch>
@@ -32,12 +40,12 @@ const Section: Component<SectionProps> = props => {
                     <tr>
                         <td>{props.value.schema.title}</td>
                     </tr>
-                    <For each={Object.values(props.value.type === 'group' && props.value.items)}>
-                        {value => <Section value={value} />}
+                    <For each={Object.entries(props.value.type === 'group' && props.value.items)}>
+                        {([key, value]) => <Section value={value} onChange={v => onChange(key, v)} />}
                     </For>
                 </Match>
                 <Match when={true}>
-                    <Setting setting={props.value} />
+                    <Setting setting={props.value} onChange={props.onChange} />
                 </Match>
             </Switch>
         </>
@@ -46,13 +54,33 @@ const Section: Component<SectionProps> = props => {
 
 export type SettingProps = {
     setting: StructuredValue
+    onChange?: (v: StructuredValue) => void
 }
 
 const Setting: Component<SettingProps> = props => {
+    const onInput = (e: Event) => {
+        const v = (e.target as HTMLInputElement).value
+        const n = Number.parseInt(v)
+        if (Number.isNaN(n)) return
+        props.onChange?.({ ...props.setting, value: v } as any)
+    }
     return (
         <tr title={props.setting.schema.description}>
             <td>{props.setting.schema.title}</td>
-            <td>{props.setting.type !== 'group' && props.setting.value}</td>
+            <td>
+                <Switch>
+                    <Match when={props.setting.type === 'number'}>
+                        <input
+                            type="number"
+                            value={props.setting.type === 'number' && props.setting.value}
+                            onInput={onInput}
+                        />
+                    </Match>
+                    <Match when={props.setting.type === 'key'}>
+                        <input type="text" value={props.setting.type === 'key' && props.setting.value} />
+                    </Match>
+                </Switch>
+            </td>
         </tr>
     )
 }

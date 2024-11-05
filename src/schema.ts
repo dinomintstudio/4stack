@@ -35,15 +35,19 @@ export const conformSchema = (o: any, schema: Schema): StructuredValue => {
                 Object.entries(schema.items).map(([key, itemSchema]) => {
                     if (!(key in o)) throw Error(`no property for key \`${key}\``)
                     const value = o[key]
-                    if (itemSchema.type === 'group') {
-                        return [key, conformSchema(value, itemSchema)]
-                    } else {
-                        return [key, { schema: itemSchema, value }]
-                    }
+                    return [key, conformSchema(value, itemSchema)]
                 })
             )
         }
     } else {
         return { type: schema.type, schema, value: o }
+    }
+}
+
+export const flattenValue = (value: StructuredValue): Record<string, any> => {
+    if (value.type === 'group') {
+        return Object.fromEntries(Object.entries(value.items).map(([key, item]) => [key, flattenValue(item)]))
+    } else {
+        return value.value
     }
 }

@@ -1,4 +1,6 @@
 :global .Settings {
+    padding: 4px;
+
     table, td {
         border: none;
     }
@@ -6,5 +8,9 @@
     td {
         padding-inline: 4px;
         padding-block: 2px;
+    }
+
+    input {
+        width: 10ch;
     }
 }

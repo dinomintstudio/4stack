@@ -297,7 +297,7 @@ export const input: Input = {
 
 export const userSettingsSchema: Schema = {
     type: 'group',
-    title: 'Settings',
+    title: 'User settings',
     items: {
         keyMap: {
             type: 'group',
@@ -748,7 +748,7 @@ export const App: Component = () => {
 
     return (
         <div class="App">
-            <Settings schema={userSettingsSchema} settings={userSettings} />
+            <Settings schema={userSettingsSchema} settings={userSettings} onChange={setUserSettings} />
             <canvas ref={canvas!} />
         </div>
     )
