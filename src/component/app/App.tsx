@@ -1,7 +1,9 @@
 import { Engine, Vector, vec } from '@vole-engine/core'
 import { Context, DrawOptions } from '@vole-engine/draw'
 import { Subscription } from 'rxjs'
-import { type Component, onCleanup, onMount } from 'solid-js'
+import { Component, createSignal, onCleanup, onMount } from 'solid-js'
+import { Schema } from '../../schema'
+import { Settings } from '../settings/Settings'
 import './App.module.scss'
 
 export const createOrientations = (desc: PieceDescription): PieceOrientationState => {
@@ -293,6 +295,57 @@ export const input: Input = {
     hold: createButton()
 }
 
+export const userSettingsSchema: Schema = {
+    type: 'group',
+    title: 'Settings',
+    items: {
+        keyMap: {
+            type: 'group',
+            title: 'Controls',
+            items: {
+                left: { type: 'key', title: 'Left', description: 'Shift left' },
+                right: { type: 'key', title: 'Right', description: 'Shift right' },
+                cw: { type: 'key', title: 'CW', description: 'Rotate clockwise' },
+                ccw: { type: 'key', title: 'CCW', description: 'Rotate counter-clockwise' },
+                r180: { type: 'key', title: '180', description: 'Rotate 180' },
+                soft: { type: 'key', title: 'Soft', description: 'Soft drop' },
+                hard: { type: 'key', title: 'Hard', description: 'Hard drop' },
+                hold: { type: 'key', title: 'Hold', description: 'Hold piece' }
+            }
+        },
+        handling: {
+            type: 'group',
+            title: 'Handling',
+            items: {
+                arr: { type: 'number', title: 'ARR', description: 'Auto repeat rate' },
+                das: { type: 'number', title: 'DAS', description: 'Delayed auto shift' },
+                sdf: { type: 'number', title: 'SDF', description: 'Soft drop factor' }
+            }
+        }
+    }
+}
+
+export const [userSettings, setUserSettings] = createSignal({
+    keyMap: {
+        left: 'KeyA',
+        right: 'KeyD',
+        ccw: 'KeyJ',
+        cw: 'KeyL',
+        r180: 'KeyK',
+        soft: 'KeyS',
+        hard: 'Space',
+        hold: 'KeyI'
+    },
+    // TODO: fractional rates
+    // TODO: 0F rates
+    // DAS cut delay
+    handling: {
+        arr: 2,
+        das: 10,
+        sdf: 20
+    }
+})
+
 export const config = {
     boardSize: vec(10, 20),
     visual: {
@@ -311,23 +364,6 @@ export const config = {
         ],
         blockLineWidth: 1,
         visibleQueuePieces: 4
-    },
-    keyMap: {
-        left: 'KeyA',
-        right: 'KeyD',
-        ccw: 'KeyJ',
-        cw: 'KeyL',
-        r180: 'KeyK',
-        soft: 'KeyS',
-        hard: 'Space',
-        hold: 'KeyI'
-    },
-    // TODO: fractional rates
-    // TODO: 0F rates
-    handling: {
-        arr: 2,
-        das: 10,
-        sdf: 20
     },
     game: {
         gravity: 2 / 60,
@@ -488,7 +524,7 @@ export const App: Component = () => {
     const handleKeyboard = (): void => {
         const handleKey = (e: KeyboardEvent): void => {
             if (e.repeat) return
-            const result = Object.entries(config.keyMap).find(([, code]) => code === e.code)
+            const result = Object.entries(userSettings().keyMap).find(([, code]) => code === e.code)
             if (!result) return
             const [action] = result
             const button = input[action as keyof Input]
@@ -535,11 +571,11 @@ export const App: Component = () => {
                 lockReset(state)
             }
         }
-        if (buttonFires(input.right, config.handling.das, config.handling.arr)) {
+        if (buttonFires(input.right, userSettings().handling.das, userSettings().handling.arr)) {
             piece.position = piece.position.add(vec(1, 0))
             checkPos()
         }
-        if (buttonFires(input.left, config.handling.das, config.handling.arr)) {
+        if (buttonFires(input.left, userSettings().handling.das, userSettings().handling.arr)) {
             piece.position = piece.position.add(vec(-1, 0))
             checkPos()
         }
@@ -577,7 +613,7 @@ export const App: Component = () => {
             checkOrient()
         }
 
-        const softDropRepeatRate = Math.floor(1 / (config.game.gravity * config.handling.sdf))
+        const softDropRepeatRate = Math.floor(1 / (config.game.gravity * userSettings().handling.sdf))
         if (buttonFires(input.soft, 0, softDropRepeatRate)) {
             if (canFell(state.board, piece)) {
                 piece.position = piece.position.add(vec(0, -1))
@@ -712,6 +748,7 @@ export const App: Component = () => {
 
     return (
         <div class="App">
+            <Settings schema={userSettingsSchema} settings={userSettings} />
             <canvas ref={canvas!} />
         </div>
     )
