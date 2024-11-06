@@ -134,6 +134,13 @@ export type Button = {
     pressedFrame?: number
 }
 
+export type ActionType = keyof Input
+
+export type Action = {
+    type: 'press' | 'repeat' | '0f'
+    action: ActionType
+}
+
 export type State = {
     board: Board
     activePiece?: ActivePiece
@@ -159,6 +166,8 @@ export type State = {
      * False if hold action was already used for the active piece
      */
     holdAvailable: boolean
+    keyBuffer: KeyboardEvent[]
+    actionBuffer: Action[]
 }
 
 export const dt = 1 / 60
@@ -336,8 +345,6 @@ export const defaultUserSettings = {
         hard: 'Space',
         hold: 'KeyC'
     },
-    // TODO: fractional rates
-    // TODO: 0F rates
     // DAS cut delay
     handling: {
         arr: 2,
@@ -381,7 +388,7 @@ export const App: Component = () => {
     const subs: Subscription[] = []
     let state: State
 
-    const createState = () => ({
+    const createState = (): State => ({
         board: [],
         activePiece: undefined,
         truePieceY: undefined,
@@ -389,7 +396,9 @@ export const App: Component = () => {
         lockResets: 0,
         queue: generateQueue(piecesDescription, piecesDescription.length * 64),
         queueIndex: 0,
-        holdAvailable: true
+        holdAvailable: true,
+        keyBuffer: [],
+        actionBuffer: []
     })
 
     const resizeWindow = (): void => {
@@ -526,63 +535,124 @@ export const App: Component = () => {
     const handleKeyboard = (): void => {
         const handleKey = (e: KeyboardEvent): void => {
             if (e.repeat) return
-            const result = Object.entries(userSettings().keyMap).find(([, code]) => code === e.code)
-            if (!result) return
-            const [action] = result
-            const button = input[action as keyof Input]
-            button.down = e.type === 'keydown'
+            state.keyBuffer.push(e)
         }
         window.addEventListener('keydown', handleKey)
         window.addEventListener('keyup', handleKey)
     }
 
     const updateInput = (): void => {
-        Object.values(input).forEach(button => {
+        state.keyBuffer.forEach(e => {
+            const actionCodeTuple = Object.entries(userSettings().keyMap).find(([, code]) => code === e.code)
+            if (!actionCodeTuple) return
+            const action = actionCodeTuple[0] as ActionType
+            const button = input[action]
+            button.down = e.type === 'keydown'
+        })
+
+        state.actionBuffer = []
+
+        Object.entries(input).forEach(([action, button]) => {
             button.pressed = button.down && !button.held
             button.released = !button.down && button.held
             button.held = button.down
 
             if (button.pressed) {
                 button.pressedFrame = engine.frameInfo.id
+                state.actionBuffer.push({ type: 'press', action: action as ActionType })
             }
             if (button.released) {
                 button.pressedFrame = undefined
             }
         })
-    }
 
-    const buttonFires = (button: Button, startDelay: number, repeatRate: number): boolean => {
-        if (button.pressed) return true
-        if (button.pressedFrame) {
-            const framesDown = engine.frameInfo.id - button.pressedFrame
-            const framesRepeat = framesDown - startDelay
-            return framesRepeat >= 0 && framesRepeat % repeatRate === 0
-        }
-        return false
-    }
-
-    const updatePiece = (): void => {
-        const piece = state.activePiece
-        if (!piece) throw Error()
-
-        let originalPos = piece.position
-        const checkPos = () => {
-            if (collides(state.board, piece)) {
-                piece.position = originalPos
-            } else {
-                lockReset(state)
+        const handling = userSettings().handling
+        Object.entries(input)
+            .filter(([action]) => action === 'left' || action === 'right')
+            .forEach(([action, button]) => {
+                if (button.pressedFrame) {
+                    const framesDown = engine.frameInfo.id - button.pressedFrame
+                    const framesRepeat = framesDown - handling.das
+                    if (framesRepeat >= 0 && (handling.arr === 0 || framesRepeat % handling.arr < 1)) {
+                        const type = handling.arr === 0 ? '0f' : 'repeat'
+                        state.actionBuffer.push({ type, action: action as ActionType })
+                    }
+                }
+            })
+        if (input.soft.pressedFrame) {
+            const framesDown = engine.frameInfo.id - input.soft.pressedFrame
+            const softDropRepeatRate = Math.floor(1 / (config.game.gravity * handling.sdf))
+            if (handling.sdf === 0 || framesDown % softDropRepeatRate < 1) {
+                const type = handling.sdf === 0 ? '0f' : 'repeat'
+                state.actionBuffer.push({ type, action: 'soft' })
             }
         }
-        if (buttonFires(input.right, userSettings().handling.das, userSettings().handling.arr)) {
-            piece.position = piece.position.add(vec(1, 0))
-            checkPos()
-        }
-        if (buttonFires(input.left, userSettings().handling.das, userSettings().handling.arr)) {
-            piece.position = piece.position.add(vec(-1, 0))
-            checkPos()
-        }
+    }
 
-        originalPos = piece.position
+    const executeActionBuffer = (state: State): void => {
+        state.actionBuffer.forEach(action => {
+            switch (action.action) {
+                case 'left':
+                case 'right':
+                    if (action.type === '0f') {
+                        while (executeShift(state, action.action)) {}
+                    } else {
+                        executeShift(state, action.action)
+                    }
+                    break
+                case 'ccw':
+                case 'cw':
+                case 'r180':
+                    executeRotate(state, action.action)
+                    break
+                case 'soft':
+                    if (action.type === '0f') {
+                        while (executeSoftDrop(state)) {}
+                    } else {
+                        executeSoftDrop(state)
+                    }
+                    break
+                case 'hard':
+                    executeHardDrop(state)
+                    break
+                case 'hold':
+                    executeHold(state)
+                    break
+            }
+        })
+    }
+
+    const executeShift = (state: State, action: ActionType): boolean => {
+        const piece = state.activePiece
+        if (!piece) return false
+
+        const originalPos = piece.position
+        const checkPos = (): boolean => {
+            const allow = !collides(state.board, piece)
+            if (allow) {
+                lockReset(state)
+            } else {
+                piece.position = originalPos
+            }
+            return allow
+        }
+        switch (action) {
+            case 'left':
+                piece.position = piece.position.add(vec(-1, 0))
+                return checkPos()
+            case 'right':
+                piece.position = piece.position.add(vec(1, 0))
+                return checkPos()
+            default:
+                throw Error()
+        }
+    }
+
+    const executeRotate = (state: State, action: ActionType): void => {
+        const piece = state.activePiece
+        if (!piece) return
+
+        const originalPos = piece.position
         const originalOrient = piece.orientation
         const checkOrient = () => {
             const wallKickTable = piecesDescription[piece.pieceId].wallKickTable
@@ -602,31 +672,70 @@ export const App: Component = () => {
                 lockReset(state)
             }
         }
-        if (input.cw.pressed) {
-            piece.orientation = (piece.orientation + 1) % 4
-            checkOrient()
-        }
-        if (input.ccw.pressed) {
-            piece.orientation = (piece.orientation + 3) % 4
-            checkOrient()
-        }
-        if (input.r180.pressed) {
-            piece.orientation = (piece.orientation + 2) % 4
-            checkOrient()
-        }
 
-        const softDropRepeatRate = Math.floor(1 / (config.game.gravity * userSettings().handling.sdf))
-        if (buttonFires(input.soft, 0, softDropRepeatRate)) {
-            if (canFell(state.board, piece)) {
-                piece.position = piece.position.add(vec(0, -1))
+        switch (action) {
+            case 'cw':
+                piece.orientation = (piece.orientation + 1) % 4
+                checkOrient()
+                break
+            case 'ccw':
+                piece.orientation = (piece.orientation + 3) % 4
+                checkOrient()
+                break
+            case 'r180':
+                piece.orientation = (piece.orientation + 2) % 4
+                checkOrient()
+                break
+        }
+    }
+
+    const executeSoftDrop = (state: State): boolean => {
+        const piece = state.activePiece
+        if (!piece) return false
+
+        const falling = canFell(state.board, piece)
+        if (falling) {
+            piece.position = piece.position.add(vec(0, -1))
+        }
+        return falling
+    }
+
+    const executeHardDrop = (state: State): void => {
+        const piece = state.activePiece
+        if (!piece) return
+
+        while (canFell(state.board, piece)) {
+            piece.position = piece.position.add(vec(0, -1))
+        }
+        lockPiece(state)
+    }
+
+    const executeHold = (state: State): void => {
+        if (input.hold.pressed && state.holdAvailable) {
+            state.holdAvailable = false
+            if (state.holdPiece !== undefined) {
+                const next = state.holdPiece
+                state.holdPiece = state.activePiece!.pieceId
+                spawnPiece(state, next)
+            } else {
+                state.holdPiece = state.activePiece!.pieceId
+                spawnPiece(state)
             }
         }
+    }
 
-        if (input.hard.pressed) {
-            while (canFell(state.board, piece)) {
-                piece.position = piece.position.add(vec(0, -1))
+    const lockPieceCheck = (state: State): void => {
+        if (state.activePiece) {
+            if (canFell(state.board, state.activePiece!)) {
+                state.frameDropped = undefined
+            } else {
+                const currentFrame = engine.frameInfo.id
+                state.frameDropped ??= currentFrame
+                const framesSinceDrop = currentFrame - state.frameDropped
+                if (framesSinceDrop >= config.game.lockDelay) {
+                    lockPiece(state)
+                }
             }
-            lockPiece(state)
         }
     }
 
@@ -648,6 +757,7 @@ export const App: Component = () => {
 
         state.holdAvailable = true
         state.activePiece = undefined
+        state.frameDropped = undefined
     }
 
     const spawnPiece = (state: State, pieceId?: number): void => {
@@ -706,7 +816,6 @@ export const App: Component = () => {
 
         subs.push(
             engine.eventDispatcher.beforeUpdate.subscribe(() => {
-                const currentFrame = engine.frameInfo.id
                 updateInput()
 
                 if (!state.activePiece) {
@@ -724,31 +833,8 @@ export const App: Component = () => {
                     state.truePieceY = state.activePiece!.position.y
                 }
 
-                updatePiece()
-
-                if (state.activePiece) {
-                    if (canFell(state.board, state.activePiece!)) {
-                        state.frameDropped = undefined
-                    } else {
-                        state.frameDropped ??= currentFrame
-                        const framesSinceDrop = currentFrame - state.frameDropped
-                        if (framesSinceDrop >= config.game.lockDelay) {
-                            lockPiece(state)
-                        }
-                    }
-                }
-
-                if (input.hold.pressed && state.holdAvailable) {
-                    state.holdAvailable = false
-                    if (state.holdPiece !== undefined) {
-                        const next = state.holdPiece
-                        state.holdPiece = state.activePiece!.pieceId
-                        spawnPiece(state, next)
-                    } else {
-                        state.holdPiece = state.activePiece!.pieceId
-                        spawnPiece(state)
-                    }
-                }
+                executeActionBuffer(state)
+                lockPieceCheck(state)
             })
         )
         subs.push(
