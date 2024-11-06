@@ -1,5 +1,5 @@
 import { Engine, Vector, vec } from '@vole-engine/core'
-import { Context, DrawOptions } from '@vole-engine/draw'
+import { Context } from '@vole-engine/draw'
 import { Subscription } from 'rxjs'
 import { Component, createSignal, onCleanup, onMount } from 'solid-js'
 import { Schema, conformSchema } from '../../schema'
@@ -355,6 +355,8 @@ export const defaultUserSettings = {
 
 export const [userSettings, setUserSettings] = createSignal(defaultUserSettings)
 
+export type BlockVisual = { style: 'solid' | 'stroke' | 'strokeOver'; strokeWidth: number }
+
 export const config = {
     boardSize: vec(10, 20),
     visual: {
@@ -372,7 +374,14 @@ export const config = {
             '#e58d3e'
         ],
         gridLineWidth: 1,
-        visibleQueuePieces: 4
+        visibleQueuePieces: 4,
+        block: {
+            style: 'solid' as const
+        },
+        ghost: {
+            style: 'strokeOver' as const,
+            strokeWidth: 2
+        }
     },
     game: {
         gravity: 2 / 60,
@@ -416,8 +425,26 @@ export const App: Component = () => {
         return vec(Math.floor(res.x), Math.floor(res.y))
     }
 
-    const drawBlock = (pos: Vector, opts: DrawOptions): void => {
-        ctx.rect(boardToScreen(pos), config.visual.blockScreenSize, opts)
+    const drawBlock = (pos: Vector, visual: BlockVisual, color: Color): void => {
+        const c = config.visual.colors[color]
+        const lineWidth = visual.strokeWidth ?? 0
+        switch (visual.style) {
+            case 'solid':
+                ctx.rect(boardToScreen(pos), config.visual.blockScreenSize, { fill: c })
+                break
+            case 'stroke':
+                ctx.rect(boardToScreen(pos), config.visual.blockScreenSize.add(Vector.One.scale(-lineWidth)), {
+                    stroke: c,
+                    lineWidth
+                })
+                break
+            case 'strokeOver':
+                ctx.rect(boardToScreen(pos), config.visual.blockScreenSize, {
+                    stroke: c,
+                    lineWidth
+                })
+                break
+        }
     }
 
     const pieceBoardPos = (piece: ActivePiece): Piece => {
@@ -426,8 +453,8 @@ export const App: Component = () => {
         }
     }
 
-    const drawPiece = (piece: ActivePiece, opts: DrawOptions): void => {
-        pieceBoardPos(piece).blocks.forEach(pos => drawBlock(pos, opts))
+    const drawPiece = (piece: ActivePiece, blockStyle: BlockVisual, color: Color): void => {
+        pieceBoardPos(piece).blocks.forEach(pos => drawBlock(pos, blockStyle, color))
     }
 
     const drawBoard = (board: Board): void => {
@@ -445,13 +472,12 @@ export const App: Component = () => {
         for (let j = 0; j < config.boardSize.x; j++) {
             for (let i = 0; i < board.length; i++) {
                 const pos = vec(j, i)
-                drawBlock(pos, { fill: colors[board[i][j]] })
+                drawBlock(pos, config.visual.block as BlockVisual, board[i][j])
             }
         }
     }
 
     const drawQueue = (state: State): void => {
-        const { colors } = config.visual
         const offset = vec(2.5, 0)
         for (let i = state.queueIndex; i < state.queueIndex + config.visual.visibleQueuePieces; i++) {
             const idx = i % state.queue.length
@@ -461,21 +487,22 @@ export const App: Component = () => {
             const rotationModeOffset = vec(piecesDescription[pieceId].rotationMode === 'normal' ? 0 : -0.5, 0)
             drawPiece(
                 { pieceId, position: config.boardSize.add(offset).add(rotationModeOffset), orientation: 0 },
-                { fill: colors[pieceId + 3] }
+                config.visual.block as BlockVisual,
+                pieceId + 3
             )
             offset.y -= 1
         }
     }
 
     const drawHold = (state: State): void => {
-        const { colors } = config.visual
         if (state.holdPiece !== undefined) {
             const pieceId = state.holdPiece
             const height = Math.max(...piecesDescription[pieceId].blocks.map(b => b.y)) + 1
             const rotationModeOffset = piecesDescription[pieceId].rotationMode === 'normal' ? 0 : 0.5
             drawPiece(
                 { pieceId, position: vec(-3.5 - rotationModeOffset, config.boardSize.y - height), orientation: 0 },
-                { fill: colors[pieceId + 3] }
+                config.visual.block as BlockVisual,
+                pieceId + 3
             )
         }
     }
@@ -491,7 +518,7 @@ export const App: Component = () => {
         }
         if (piece.position.y === ghost.position.y) return
 
-        pieceBoardPos(ghost).blocks.forEach(pos => drawBlock(pos, { stroke: config.visual.colors[piece.pieceId + 3] }))
+        drawPiece(ghost, config.visual.ghost as BlockVisual, piece.pieceId + 3)
     }
 
     const insertPiece = (board: Board, piece: ActivePiece): void => {
@@ -844,8 +871,7 @@ export const App: Component = () => {
                 drawQueue(state)
                 drawHold(state)
                 if (state.activePiece) {
-                    const { colors } = config.visual
-                    drawPiece(state.activePiece, { fill: colors[state.activePiece.pieceId + 3] })
+                    drawPiece(state.activePiece, config.visual.block as BlockVisual, state.activePiece.pieceId + 3)
                     drawGhost(state, state.activePiece)
                 }
             })
